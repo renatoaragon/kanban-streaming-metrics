@@ -104,6 +104,19 @@ batch queries over the persisted events (next stages), not on the hot path. Bein
 explicit about *which metric belongs on the stream and which belongs in batch* is
 the point.
 
+## Query layer
+
+`query.py` reads the persisted Parquet metrics and summarizes them:
+
+```bash
+PYTHONPATH=src python -m kanban_stream.query \
+  --metrics-dir output/metrics --throughput output/throughput
+```
+
+It prints the cycle-time summary (count, mean, median, max), the total completed,
+current WIP, and the slowest cards. The summary functions are pure
+(`DataFrame → value`), so they're unit-tested without any Parquet I/O.
+
 ## Tests
 
 ```bash
@@ -121,7 +134,7 @@ push and PR.
 - [x] **3 — Consumer**: PySpark Structured Streaming reads and parses `board.events`.
 - [x] **4 — Aggregations**: windowed throughput (streaming, watermarked), cycle time, WIP.
 - [x] **5 — Metrics sink**: persist throughput (stream, checkpointed) + cycle time / WIP (batch) to Parquet.
-- [ ] **6 — Query layer**: small script/notebook to read and chart the metrics.
+- [x] **6 — Query layer**: read the Parquet metrics and summarize (pure, tested functions).
 - [ ] **7 — Integration tests & write-up**: end-to-end pipeline test and the design trade-offs.
 
 ## License
