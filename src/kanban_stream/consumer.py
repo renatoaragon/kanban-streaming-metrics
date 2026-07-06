@@ -11,6 +11,8 @@ from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import StringType, StructField, StructType
 
+from kanban_stream.aggregations import throughput
+
 TOPIC = "board.events"
 KAFKA_PACKAGE = "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1"
 
@@ -59,12 +61,17 @@ def read_stream(spark: SparkSession, bootstrap: str, topic: str = TOPIC) -> Data
 def run(bootstrap: str, topic: str) -> None:
     spark = build_spark()
     spark.sparkContext.setLogLevel("WARN")
-    parsed = parse_events(read_stream(spark, bootstrap, topic))
+
+    # Watermark tolerates late events by up to 10 minutes before a window is final.
+    parsed = parse_events(read_stream(spark, bootstrap, topic)).withWatermark(
+        "ts", "10 minutes"
+    )
+    metrics = throughput(parsed, window_duration="1 hour")
 
     query = (
-        parsed.writeStream.format("console")
+        metrics.writeStream.format("console")
         .option("truncate", "false")
-        .outputMode("append")
+        .outputMode("update")
         .start()
     )
     query.awaitTermination()
