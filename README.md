@@ -63,20 +63,33 @@ PYTHONPATH=src python -m kanban_stream.producer --cards 50 --rate 5
 Each card emits a `created → moved → done` lifecycle with realistic, varying
 timestamps. Watch them arrive in the Redpanda Console (`board.events`).
 
+## Consumer
+
+Read the stream with PySpark Structured Streaming (downloads the Kafka connector
+on first run):
+
+```bash
+PYTHONPATH=src python -m kanban_stream.consumer --bootstrap localhost:9092
+```
+
+It parses each JSON event into typed columns and prints them to the console.
+Aggregations land in the next stage.
+
 ## Tests
 
 ```bash
 pytest -q
 ```
 
-The event model and generator are pure and deterministic (timestamps injected),
-so the unit tests need no broker. CI runs them on every push and PR.
+Both the event generator and the Spark parsing (`parse_events`) are tested on
+static inputs, so no broker is needed. CI runs them (Java + PySpark) on every
+push and PR.
 
 ## Roadmap
 
 - [x] **1 — Infra & architecture**: Redpanda via Docker Compose.
 - [x] **2 — Event producer**: synthetic Kafka producer + unit tests + CI.
-- [ ] **3 — Consumer**: PySpark Structured Streaming reads `board.events`.
+- [x] **3 — Consumer**: PySpark Structured Streaming reads and parses `board.events`.
 - [ ] **4 — Aggregations**: windowed throughput, cycle time, WIP (with watermarks).
 - [ ] **5 — Metrics sink**: persist windowed metrics to Parquet.
 - [ ] **6 — Query layer**: small script/notebook to read and chart the metrics.
