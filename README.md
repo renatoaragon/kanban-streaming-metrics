@@ -73,7 +73,18 @@ PYTHONPATH=src python -m kanban_stream.consumer --bootstrap localhost:9092
 ```
 
 It parses each JSON event, applies a **10-minute watermark**, and streams
-**windowed throughput** (completed cards per hour) to the console.
+**windowed throughput** (completed cards per hour). By default it prints to the
+console; pass `--out` to persist to Parquet with checkpointing:
+
+```bash
+PYTHONPATH=src python -m kanban_stream.consumer \
+  --bootstrap localhost:9092 --out output/throughput
+```
+
+The Parquet sink uses `outputMode("append")` so only **finalized** windows (past
+the watermark) are written, and a checkpoint gives exactly-once recovery on
+restart. `write_metrics_batch` writes the batch metrics (cycle time, WIP) as
+Parquet snapshots.
 
 ## Metrics
 
@@ -109,7 +120,7 @@ push and PR.
 - [x] **2 — Event producer**: synthetic Kafka producer + unit tests + CI.
 - [x] **3 — Consumer**: PySpark Structured Streaming reads and parses `board.events`.
 - [x] **4 — Aggregations**: windowed throughput (streaming, watermarked), cycle time, WIP.
-- [ ] **5 — Metrics sink**: persist windowed metrics to Parquet.
+- [x] **5 — Metrics sink**: persist throughput (stream, checkpointed) + cycle time / WIP (batch) to Parquet.
 - [ ] **6 — Query layer**: small script/notebook to read and chart the metrics.
 - [ ] **7 — Integration tests & write-up**: end-to-end pipeline test and the design trade-offs.
 
