@@ -7,7 +7,8 @@ Board activity (cards created, moved, completed) is published as a stream of
 events; a streaming job computes live metrics — **throughput**, **cycle time**
 (`todo → done`), and **work-in-progress** — over time windows.
 
-> 🚧 Built in the open, one stage at a time. Each stage is a small, real step.
+> Built in the open across 7 reviewed pull requests — one small, real stage at a
+> time, each with tests and CI.
 
 ## Architecture
 
@@ -123,9 +124,31 @@ current WIP, and the slowest cards. The summary functions are pure
 pytest -q
 ```
 
-Both the event generator and the Spark parsing (`parse_events`) are tested on
-static inputs, so no broker is needed. CI runs them (Java + PySpark) on every
-push and PR.
+The unit tests cover the event generator, the Spark parsing, each metric, the
+Parquet sinks, and the query summaries; `test_pipeline.py` runs the whole
+transformation chain end to end (generate → aggregate → query). The two external
+boundaries — Kafka and Parquet writes — are kept out of the unit tests. CI runs
+everything (Java + PySpark) on every push and PR.
+
+## Design trade-offs
+
+The engineering decisions this project makes on purpose:
+
+- **Streaming vs batch, per metric.** Throughput is a windowed count → it runs on
+  the live stream behind a watermark. Cycle time (self-join) and WIP (ordered
+  window function) can't run in a single streaming pass, so they're batch queries
+  over the persisted events. Knowing *where each metric belongs* matters more than
+  forcing everything onto the stream.
+- **Watermarks for late data.** A 10-minute watermark lets late events still land
+  in their window while bounding how long state is held before a window is final.
+- **Exactly-once on the sink.** The Parquet stream writes in `append` mode with a
+  checkpoint, so a restart resumes without duplicating or losing finalized windows.
+- **I/O at the edges, logic in the middle.** Kafka read and Parquet write are thin
+  boundaries; the logic is pure `DataFrame → DataFrame`/value functions, which is
+  why the suite runs fast and without a broker.
+- **Is Kafka + Spark even warranted?** For a single low-volume board, no — see the
+  top of this README. The project builds it anyway to demonstrate the architecture
+  *and* the judgement of when it pays off.
 
 ## Roadmap
 
@@ -135,7 +158,7 @@ push and PR.
 - [x] **4 — Aggregations**: windowed throughput (streaming, watermarked), cycle time, WIP.
 - [x] **5 — Metrics sink**: persist throughput (stream, checkpointed) + cycle time / WIP (batch) to Parquet.
 - [x] **6 — Query layer**: read the Parquet metrics and summarize (pure, tested functions).
-- [ ] **7 — Integration tests & write-up**: end-to-end pipeline test and the design trade-offs.
+- [x] **7 — Integration test & write-up**: end-to-end pipeline test and the design trade-offs.
 
 ## License
 
