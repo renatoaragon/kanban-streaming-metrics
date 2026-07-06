@@ -12,6 +12,7 @@ from pyspark.sql import functions as F
 from pyspark.sql.types import StringType, StructField, StructType
 
 from kanban_stream.aggregations import throughput
+from kanban_stream.sink import write_throughput_stream
 
 TOPIC = "board.events"
 KAFKA_PACKAGE = "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1"
@@ -58,7 +59,12 @@ def read_stream(spark: SparkSession, bootstrap: str, topic: str = TOPIC) -> Data
     return raw.selectExpr("CAST(value AS STRING) AS value")
 
 
-def run(bootstrap: str, topic: str) -> None:
+def run(
+    bootstrap: str,
+    topic: str,
+    out_path: str | None = None,
+    checkpoint: str | None = None,
+) -> None:
     spark = build_spark()
     spark.sparkContext.setLogLevel("WARN")
 
@@ -68,21 +74,29 @@ def run(bootstrap: str, topic: str) -> None:
     )
     metrics = throughput(parsed, window_duration="1 hour")
 
-    query = (
-        metrics.writeStream.format("console")
-        .option("truncate", "false")
-        .outputMode("update")
-        .start()
-    )
+    if out_path:
+        # Parquet needs a checkpoint and append mode (finalized windows only).
+        query = write_throughput_stream(
+            metrics, out_path, checkpoint or f"{out_path}/_checkpoint"
+        )
+    else:
+        query = (
+            metrics.writeStream.format("console")
+            .option("truncate", "false")
+            .outputMode("update")
+            .start()
+        )
     query.awaitTermination()
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Consume and print board events.")
+    parser = argparse.ArgumentParser(description="Consume board events into metrics.")
     parser.add_argument("--bootstrap", default="localhost:9092")
     parser.add_argument("--topic", default=TOPIC)
+    parser.add_argument("--out", default=None, help="Parquet output path (else console)")
+    parser.add_argument("--checkpoint", default=None)
     args = parser.parse_args()
-    run(args.bootstrap, args.topic)
+    run(args.bootstrap, args.topic, args.out, args.checkpoint)
 
 
 if __name__ == "__main__":
