@@ -114,9 +114,18 @@ PYTHONPATH=src python -m kanban_stream.query \
   --metrics-dir output/metrics --throughput output/throughput
 ```
 
-It prints the cycle-time summary (count, mean, median, max), the total completed,
-current WIP, and the slowest cards. The summary functions are pure
-(`DataFrame → value`), so they're unit-tested without any Parquet I/O.
+It prints the cycle-time summary (count, mean, median, **p85/p95**, max), the
+total completed, current WIP, and the slowest cards. Pass `--sla-minutes 120`
+to also print the share of cards completed within a target.
+
+**Forecast with percentiles, not averages.** Cycle-time distributions are
+right-skewed: one stuck card drags the mean far above what most cards actually
+take. "85% of cards finish within X minutes" (p85) is a commitment you can give
+someone; the average is a number that describes nobody. `sla_attainment` asks
+the inverse question: of the promises already made, how many did the flow keep?
+
+The summary functions are pure (`DataFrame → value`), so they're unit-tested
+without any Parquet I/O.
 
 ## Tests
 

@@ -3,6 +3,7 @@ from datetime import datetime
 from kanban_stream.query import (
     cycle_time_summary,
     latest_wip,
+    sla_attainment,
     throughput_total,
     top_slowest,
 )
@@ -17,6 +18,33 @@ def test_cycle_time_summary(spark):
     assert s["cards"] == 3
     assert s["avg_minutes"] == 140.0
     assert s["max_minutes"] == 240.0
+
+
+def test_summary_percentiles_expose_the_skewed_tail(spark):
+    # 19 quick cards and one disaster: the average hides the tail, the
+    # forecasting percentiles do not.
+    rows = [(f"C{i}", 10.0) for i in range(19)] + [("C99", 1000.0)]
+    cycle = spark.createDataFrame(rows, ["card_id", "cycle_minutes"])
+
+    s = cycle_time_summary(cycle)
+    assert s["median_minutes"] <= s["p85_minutes"] <= s["p95_minutes"] <= s["max_minutes"]
+    assert s["p85_minutes"] == 10.0  # most cards really are fast...
+    assert s["avg_minutes"] == 59.5  # ...and the average says neither fast nor slow
+
+
+def test_sla_attainment_is_exact(spark):
+    cycle = spark.createDataFrame(
+        [("C1", 30.0), ("C2", 60.0), ("C3", 90.0), ("C4", 120.0)],
+        ["card_id", "cycle_minutes"],
+    )
+    assert sla_attainment(cycle, target_minutes=60.0) == 50.0
+    assert sla_attainment(cycle, target_minutes=120.0) == 100.0
+    assert sla_attainment(cycle, target_minutes=10.0) == 0.0
+
+
+def test_sla_attainment_empty_frame_is_zero(spark):
+    cycle = spark.createDataFrame([], "card_id string, cycle_minutes double")
+    assert sla_attainment(cycle, target_minutes=60.0) == 0.0
 
 
 def test_top_slowest_orders_desc(spark):
