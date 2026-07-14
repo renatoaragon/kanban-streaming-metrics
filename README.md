@@ -169,6 +169,25 @@ The engineering decisions this project makes on purpose:
 - [x] **6 — Query layer**: read the Parquet metrics and summarize (pure, tested functions).
 - [x] **7 — Integration test & write-up**: end-to-end pipeline test and the design trade-offs.
 
+## Related work
+
+This repo's sibling,
+[kafka-retail-streaming](https://github.com/renatoaragon/kafka-retail-streaming),
+covers the platform side of the same discipline. The two are deliberately
+complementary:
+
+- **This repo** is a *flow-metrics case study*: one domain question ("how is
+  work flowing?") answered end to end — throughput, cycle time, WIP, and
+  percentile-based forecasting (p85/p95, SLA attainment) — with the honest
+  conclusion that a single board doesn't warrant the stack it demonstrates.
+- **kafka-retail-streaming** is a *platform patterns* repo: exactly-once
+  delivery into Iceberg (with an ADR on what that guarantee really means and
+  where it stops), dead-letter queues, late-data handling, and CDC from
+  Postgres via Debezium merged with `foreachBatch`.
+
+Read this one for what streaming *measures*; read that one for what streaming
+*costs to run correctly*.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
