@@ -1,12 +1,50 @@
+import json
 from datetime import datetime
 
 from kanban_stream.query import (
+    build_report,
     cycle_time_summary,
     latest_wip,
     sla_attainment,
     throughput_total,
     top_slowest,
 )
+
+
+def _fixtures(spark):
+    cycle = spark.createDataFrame(
+        [("C1", 30.0), ("C2", 90.0)], ["card_id", "cycle_minutes"]
+    )
+    tp = spark.createDataFrame(
+        [(datetime(2025, 1, 1, 9), datetime(2025, 1, 1, 10), 2)],
+        ["window_start", "window_end", "completed"],
+    )
+    wip = spark.createDataFrame(
+        [(datetime(2025, 1, 1, 9), 3)], ["window_start", "wip"]
+    )
+    return cycle, tp, wip
+
+
+def test_build_report_bundles_every_metric(spark):
+    cycle, tp, wip = _fixtures(spark)
+
+    report = build_report(cycle, tp, wip, sla_minutes=60.0)
+
+    assert report["cycle_time_minutes"]["cards"] == 2
+    assert report["total_completed"] == 2
+    assert report["current_wip"] == 3
+    assert [c["card_id"] for c in report["slowest_cards"]] == ["C2", "C1"]
+    assert report["sla"] == {"target_minutes": 60.0, "attainment_pct": 50.0}
+
+
+def test_build_report_is_json_serializable(spark):
+    cycle, tp, wip = _fixtures(spark)
+
+    # Without an SLA target the key is absent, not null; and the whole report
+    # must survive json.dumps (that is its reason to exist).
+    report = build_report(cycle, tp, wip)
+    assert "sla" not in report
+    assert json.loads(json.dumps(report)) == report
 
 
 def test_cycle_time_summary(spark):

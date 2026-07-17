@@ -6,6 +6,7 @@ produced by the sink.
 """
 
 import argparse
+import json
 
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
@@ -65,6 +66,31 @@ def latest_wip(wip: DataFrame) -> int:
     return int(rows[0]["wip"]) if rows else 0
 
 
+def build_report(
+    cycle: DataFrame,
+    throughput_df: DataFrame,
+    wip: DataFrame,
+    sla_minutes: float | None = None,
+) -> dict:
+    """The full metrics report as one dict — the machine-readable face of the CLI.
+
+    A dashboard, a cron alert or a spreadsheet import should not have to scrape
+    the human-formatted output; this is the same numbers, structured.
+    """
+    report = {
+        "cycle_time_minutes": cycle_time_summary(cycle),
+        "total_completed": throughput_total(throughput_df),
+        "current_wip": latest_wip(wip),
+        "slowest_cards": [r.asDict() for r in top_slowest(cycle).collect()],
+    }
+    if sla_minutes is not None:
+        report["sla"] = {
+            "target_minutes": sla_minutes,
+            "attainment_pct": sla_attainment(cycle, sla_minutes),
+        }
+    return report
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Summarize persisted metrics.")
     parser.add_argument("--metrics-dir", required=True, help="dir with cycle_times/ and wip/")
@@ -75,6 +101,11 @@ def main() -> None:
         default=None,
         help="optional cycle-time target; prints the share of cards within it",
     )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="print the report as a JSON document instead of human-readable text",
+    )
     args = parser.parse_args()
 
     spark = build_spark("kanban-query")
@@ -83,6 +114,10 @@ def main() -> None:
     cycle = spark.read.parquet(f"{args.metrics_dir}/cycle_times")
     wip = spark.read.parquet(f"{args.metrics_dir}/wip")
     throughput = spark.read.parquet(args.throughput)
+
+    if args.json:
+        print(json.dumps(build_report(cycle, throughput, wip, args.sla_minutes)))
+        return
 
     print("Cycle time (minutes):", cycle_time_summary(cycle))
     if args.sla_minutes is not None:
