@@ -97,6 +97,7 @@ DataFrame` functions:
 | **Throughput** | `throughput` | Completed cards per time window. Streaming- and batch-safe — this is what the live consumer runs, behind a watermark. |
 | **Cycle time** | `cycle_times` | Per card, minutes from `created` to `done`. Analytical (a self-join), so batch-only. |
 | **WIP** | `wip_timeline` | Cumulative (entered doing − completed) per window. Uses a window function, so batch-only. |
+| **Aging WIP** | `aging_wip` | Cards still open and how long they've been open, oldest first. The mirror of cycle time: it sees the cards still stuck, not the ones that already finished. |
 
 **Streaming vs analytical (the design call):** windowed counts with a watermark
 work fine on the live stream. Cycle time and WIP need a join / ordered window
