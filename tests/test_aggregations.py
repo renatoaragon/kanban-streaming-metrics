@@ -7,7 +7,7 @@ from pyspark.sql.types import (
     TimestampType,
 )
 
-from kanban_stream.aggregations import cycle_times, throughput, wip_timeline
+from kanban_stream.aggregations import aging_wip, cycle_times, throughput, wip_timeline
 
 SCHEMA = StructType(
     [
@@ -48,6 +48,33 @@ def test_cycle_times_computes_minutes(spark):
     row = cycle_times(_events(spark, rows)).collect()[0]
     assert row["card_id"] == "C1"
     assert row["cycle_minutes"] == 180.0
+
+
+def test_aging_wip_lists_only_open_cards_by_age(spark):
+    rows = [
+        # C1: opened early, still open -> the oldest aging card
+        ("a", "card_created", "C1", None, "todo", datetime(2025, 1, 1, 9, 0)),
+        # C2: opened later, still open
+        ("b", "card_created", "C2", None, "todo", datetime(2025, 1, 1, 11, 0)),
+        # C3: opened and completed -> excluded (it has a cycle time instead)
+        ("c", "card_created", "C3", None, "todo", datetime(2025, 1, 1, 9, 30)),
+        ("d", "card_done", "C3", "doing", "done", datetime(2025, 1, 1, 12, 0)),  # also the latest ts
+    ]
+    result = aging_wip(_events(spark, rows)).collect()
+
+    # Only the two open cards, oldest first.
+    assert [r["card_id"] for r in result] == ["C1", "C2"]
+    # Age is measured to the latest event in the data (12:00): C1 = 180 min.
+    assert result[0]["age_minutes"] == 180.0
+    assert result[1]["age_minutes"] == 60.0
+
+
+def test_aging_wip_empty_when_all_cards_done(spark):
+    rows = [
+        ("a", "card_created", "C1", None, "todo", datetime(2025, 1, 1, 9, 0)),
+        ("b", "card_done", "C1", "doing", "done", datetime(2025, 1, 1, 10, 0)),
+    ]
+    assert aging_wip(_events(spark, rows)).count() == 0
 
 
 def test_wip_timeline_is_cumulative(spark):

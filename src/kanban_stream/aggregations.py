@@ -40,6 +40,34 @@ def cycle_times(events: DataFrame) -> DataFrame:
     )
 
 
+def aging_wip(events: DataFrame) -> DataFrame:
+    """Cards still open and how long they have been open, oldest first.
+
+    Cycle time only sees *completed* cards, which is survivorship bias: the
+    cards stuck the longest are exactly the ones it never reports. Aging WIP is
+    the mirror image -- cards created but not yet done -- so a card that is
+    aging can be acted on before it turns into a bad cycle time. Age is measured
+    to the latest event in the data (the "as of" now), joined in so the function
+    stays a pure DataFrame transform with no driver-side clock.
+    """
+    as_of = events.select(F.max("ts").alias("as_of"))
+    created = events.filter(F.col("event_type") == "card_created").select(
+        "card_id", F.col("ts").alias("created_at")
+    )
+    done = events.filter(F.col("event_type") == "card_done").select("card_id").distinct()
+
+    open_cards = created.join(done, "card_id", "left_anti")
+    return (
+        open_cards.crossJoin(as_of)
+        .withColumn(
+            "age_minutes",
+            (F.unix_timestamp("as_of") - F.unix_timestamp("created_at")) / 60.0,
+        )
+        .select("card_id", "created_at", "as_of", "age_minutes")
+        .orderBy(F.col("age_minutes").desc())
+    )
+
+
 def wip_timeline(events: DataFrame, window_duration: str = "1 hour") -> DataFrame:
     """Work-in-progress per window: cumulative (entered doing - completed)."""
     entered = (
