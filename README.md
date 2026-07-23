@@ -45,7 +45,8 @@ where the real thing stops paying off. That judgement is the point.
 ```
 
 The producer is a **synthetic generator** — it emits realistic board events so
-the whole pipeline runs locally with no external system.
+the whole pipeline runs locally with no external system. The event model is drawn
+from a board I use every day; the data in this repo is synthetic.
 
 ## Quickstart (infra)
 
