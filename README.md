@@ -10,6 +10,26 @@ events; a streaming job computes live metrics — **throughput**, **cycle time**
 > Built in the open across 7 reviewed pull requests — one small, real stage at a
 > time, each with tests and CI.
 
+## The honest question first: is this stack even warranted?
+
+A single personal Kanban board produces a trickle of events. At that volume,
+Kafka and Spark are **over-engineering** — a plain consumer, or even a periodic
+SQL query, would answer every question this project asks.
+
+It builds the streaming architecture anyway, on purpose, and treats *knowing when
+the trade-off pays off* as part of the deliverable. Most streaming portfolios make
+the opposite mistake: they push every metric onto the stream to look impressive
+and can't say why. Here the reasoning is the artefact, not the tool count.
+
+- **Justified** when events are high-volume, multi-producer, need replay, or feed
+  several independent consumers.
+- **Not justified** for a low-volume, single-consumer board — document it and
+  reach for something simpler.
+
+So the repo does both: it builds the real thing — Structured Streaming, a
+watermark for late data, an exactly-once Parquet sink — *and* it draws the line
+where the real thing stops paying off. That judgement is the point.
+
 ## Architecture
 
 ```
@@ -26,21 +46,6 @@ events; a streaming job computes live metrics — **throughput**, **cycle time**
 
 The producer is a **synthetic generator** — it emits realistic board events so
 the whole pipeline runs locally with no external system.
-
-### When is Kafka + Spark actually worth it?
-
-A single personal board produces a trickle of events — at that volume, Kafka and
-Spark are **over-engineering**, and a plain consumer (or even a periodic SQL
-query) would do. This project builds the streaming architecture anyway, on
-purpose, and treats *knowing when the trade-off pays off* as part of the
-deliverable:
-
-- **Justified** when events are high-volume, multi-producer, need replay, or feed
-  several independent consumers.
-- **Not justified** for a low-volume, single-consumer board — document it and use
-  something simpler.
-
-That judgement is the point, not the tooling.
 
 ## Quickstart (infra)
 
